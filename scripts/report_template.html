@@ -1,0 +1,302 @@
+<title>Sentinel-2 Change Detection — Chiba & SNCF Bassin</title>
+<style>
+  :root {
+    --bg: #F7F9F8;
+    --surface: #FFFFFF;
+    --ink: #16211F;
+    --ink-2: #5C6B68;
+    --accent: #0E7C7B;
+    --accent-ink: #0A5958;
+    --line: #DCE4E2;
+    --chip-bg: #E5F0EE;
+    --warn-bg: #FBF3E4;
+    --warn-line: #E8D5A8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0D1514;
+      --surface: #131D1B;
+      --ink: #E4ECEA;
+      --ink-2: #93A5A1;
+      --accent: #4FD1C5;
+      --accent-ink: #6FDDD2;
+      --line: #24312E;
+      --chip-bg: #17302C;
+      --warn-bg: #2A2418;
+      --warn-line: #4A3E22;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0D1514;
+    --surface: #131D1B;
+    --ink: #E4ECEA;
+    --ink-2: #93A5A1;
+    --accent: #4FD1C5;
+    --accent-ink: #6FDDD2;
+    --line: #24312E;
+    --chip-bg: #17302C;
+    --warn-bg: #2A2418;
+    --warn-line: #4A3E22;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 20px 80px;
+  }
+  main { max-width: 920px; margin: 0 auto; }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 56px 0 10px;
+  }
+  h1 {
+    font-size: clamp(28px, 4.5vw, 40px);
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .lede { font-size: 17px; color: var(--ink-2); max-width: 64ch; margin: 0 0 8px; }
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 52px 0 10px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+  }
+  h3 { font-size: 16px; font-weight: 650; margin: 26px 0 6px; }
+  p { max-width: 70ch; margin: 10px 0; }
+  a { color: var(--accent-ink); }
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--chip-bg);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  table {
+    border-collapse: collapse;
+    font-size: 14px;
+    margin: 14px 0;
+    font-variant-numeric: tabular-nums;
+    min-width: 560px;
+  }
+  .tablewrap { overflow-x: auto; }
+  th, td { text-align: left; padding: 7px 16px 7px 0; border-bottom: 1px solid var(--line); }
+  th {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  td.num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+  .figwrap {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px;
+    margin: 18px 0 6px;
+    overflow-x: auto;
+  }
+  .figwrap img { display: block; max-width: 100%; height: auto; }
+  .figcap {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    color: var(--ink-2);
+    margin: 6px 0 0;
+    max-width: 88ch;
+  }
+  .note {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-line);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 14.5px;
+    max-width: 74ch;
+    margin: 16px 0;
+  }
+  ul { max-width: 70ch; padding-left: 22px; }
+  li { margin: 6px 0; }
+  .method-tag {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--accent-ink);
+    background: var(--chip-bg);
+    border-radius: 4px;
+    padding: 1px 7px;
+    margin-right: 4px;
+  }
+</style>
+<main>
+  <p class="eyebrow">Change detection · Sentinel-2 · no training</p>
+  <h1>Training-free change detection on two sites: Tomisato (Chiba) and SNCF Bassin</h1>
+  <p class="lede">
+    Four unsupervised methods — NDVI difference, Change Vector Analysis, IR-MAD, and
+    TESSERA foundation-model embeddings — applied to season-matched Sentinel-2 pairs.
+    A pixel is called changed when at least two methods agree.
+  </p>
+
+  <h2>What was run</h2>
+  <p>
+    Imagery comes from the public <strong>Earth Search STAC API</strong> (Sentinel-2 L2A
+    COGs on AWS) — same data as the internal <code>GeoData-APIs</code> script but with no
+    keys required; scenes are listed as a GeoDataFrame, one index is picked per date, and
+    the four 10&nbsp;m RGBI bands are windowed straight out of the cloud-optimized
+    GeoTIFFs, snapped to a common 10&nbsp;m grid so both dates align pixel-perfectly.
+  </p>
+  <div class="tablewrap"><table>
+    <tr><th>Site</th><th>Before scene</th><th>After scene</th><th>Cloud</th><th>Consensus changed</th></tr>
+    <tr>
+      <td>Tomisato, Chiba (6.3 km² AOI + 100 m pad)</td>
+      <td class="num">2020-05-02 (S2A)</td>
+      <td class="num">2025-04-16 (S2C)</td>
+      <td class="num">0.03% / 0.57%</td>
+      <td class="num">3.9% of pixels</td>
+    </tr>
+    <tr>
+      <td>SNCF Bassin (0.04 km² AOI + 500 m pad)</td>
+      <td class="num">2017-01-26 (S2A)</td>
+      <td class="num">2026-01-04 (S2B)</td>
+      <td class="num">0.08% / 0.02%</td>
+      <td class="num">8.7% of pixels</td>
+    </tr>
+  </table></div>
+  <div class="note">
+    <strong>Date caveats.</strong> Sentinel-2 only exists from mid-2015, so the requested
+    2012 baseline for Bassin is impossible from S2 — the earliest cloud-free scene over the
+    site is late 2016 / early 2017. TESSERA embeddings for Japan currently stop at 2024, so
+    the embedding comparison for Chiba is 2020→2024 (imagery comparison is 2020→2025).
+  </div>
+
+  <h2>Methods (all training-free)</h2>
+  <ul>
+    <li><span class="method-tag">ΔNDVI</span> Vegetation index difference after robust
+      per-band radiometric normalization. Directional: red = vegetation loss.</li>
+    <li><span class="method-tag">CVA</span> Change Vector Analysis — Euclidean magnitude
+      of the 4-band spectral change vector; Otsu threshold.</li>
+    <li><span class="method-tag">IR-MAD</span> Iteratively Reweighted Multivariate
+      Alteration Detection (Nielsen 2007) — canonical-correlation change statistic,
+      invariant to linear radiometric differences between acquisitions; Otsu threshold on
+      the χ² statistic.</li>
+    <li><span class="method-tag">TESSERA</span> Cambridge's
+      <a href="https://github.com/ucam-eo/tessera">TESSERA foundation model</a>: precomputed
+      128-dim annual embeddings of the full Sentinel-1/2 time series at 10 m, fetched via
+      <code>geotessera</code>. Change = per-pixel cosine distance between years. Because each
+      embedding summarizes a whole year of observations, it is insensitive to single-date
+      artifacts (clouds, sun angle, one-off field states) — the strongest "potential
+      solution" of the set.</li>
+  </ul>
+
+  <h2>Site 1 — Shimizu / Tomisato, Chiba (2020 → 2025)</h2>
+  <div class="figwrap"><img src="{{CHIBA_PNG}}" alt="Chiba change detection panel"></div>
+  <p class="figcap">Top: before/after true-color, consensus change overlay (pink), method
+    agreement count. Bottom: ΔNDVI, CVA magnitude, IR-MAD √χ², TESSERA cosine distance.
+    Cyan outline = AOI.</p>
+  <p>
+    The methods converge on a set of discrete parcels: new large-roof buildings
+    (warehouses/greenhouses) in the south-central and eastern AOI, cleared and newly
+    developed lots along the northern edge, and field-to-built conversions. Agricultural
+    parcels rotate crops between the two springs, which single-date methods partially flag;
+    the 2-of-3 consensus suppresses most of that noise while keeping the construction
+    footprints. TESSERA shows the same hotspots with sharper parcel boundaries, plus
+    broader agricultural-practice change that annual embeddings legitimately see.
+  </p>
+
+  <h2>Site 2 — SNCF Bassin (2017 → 2026)</h2>
+  <div class="figwrap"><img src="{{BASSIN_PNG}}" alt="Bassin change detection panel"></div>
+  <p class="figcap">Same panel layout. The AOI (cyan) is only ~430 × 195 m — about 43 × 20
+    Sentinel-2 pixels — so a 500 m context buffer is shown.</p>
+  <p>
+    Inside the small basin AOI the methods find modest change concentrated at its eastern
+    end, consistent with works around the rail junction. The dominant signal in the scene
+    is immediately southwest of the AOI: a large site that all three methods flag at
+    maximum agreement — visible in the after-image as new construction/laydown areas next
+    to the existing building complex. The dark-red block in the agreement map is that
+    development; the ΔNDVI panel shows it as vegetation loss.
+  </p>
+
+  <h2>Assessment of the approaches</h2>
+  <ul>
+    <li><strong>TESSERA is the most promising single method</strong> for this use case:
+      no training, 10 m resolution, whole-year robustness, and simple to productionize
+      (fetch two years of embeddings, cosine distance, threshold). Main limits today are
+      coverage lag (Japan 2025 not yet published; 2026 not yet available anywhere) and no
+      sub-annual dating of the change.</li>
+    <li><strong>IR-MAD + CVA on season-matched pairs</strong> is a strong, fully
+      self-contained fallback that works on any pair of dates (including the freshest
+      imagery), at the cost of sensitivity to phenology and single-date artifacts.</li>
+    <li><strong>Consensus voting (≥2 of 3)</strong> gave the cleanest maps on both sites
+      and is what the pink overlays show.</li>
+    <li>For AOIs as small as Bassin (~800 pixels), Sentinel-2 is near its useful floor —
+      detected change is credible but coarse; VHR imagery would be needed for
+      structure-level detail.</li>
+  </ul>
+
+  <h2>Operational monitoring backtest (alerting tiers)</h2>
+  <p>
+    Beyond the one-shot pair analysis, a monitoring pipeline was backtested: every
+    usable Sentinel-2 scene over the AOI is cloud-masked with the L2A scene
+    classification (SCL) and compared against a <strong>monthly baseline
+    composite</strong> (median of the same month ±1 across the 3 prior years). A pixel
+    raises an alert only after being anomalous (robust z&nbsp;&gt;&nbsp;4) on
+    <strong>3 consecutive observations</strong> — the persistence rule that suppresses
+    clouds, shadows and one-off field states. Two detectors run side by side:
+    <span class="method-tag">Tier 1</span> CVA on raw spectra, and
+    <span class="method-tag">Tier 2</span> dense deep features from SSL4EO's
+    Sentinel-2-pretrained ResNet18 (TorchGeo), compared by cosine distance.
+  </p>
+  <h3>Chiba — monitored through 2025 (58 scenes, baseline 2022–2024)</h3>
+  <div class="figwrap"><img src="{{CHIBA_MONITOR_PNG}}" alt="Chiba alerting backtest"></div>
+  <p class="figcap">Left: alerts on the after-image, colored by first-alert date.
+    Middle: cumulative alerted area with per-scene new alerts. Right: raw per-scene
+    anomaly fraction before persistence.</p>
+  <p>
+    Tier 1 accumulated 131&nbsp;ha of alerts, mostly crop-rotation confetti — in
+    agriculture, this year's fields genuinely differ from the baseline for months, so
+    persistence alone cannot suppress it. Tier 2 alerted 49&nbsp;ha in compact
+    parcel-shaped blobs and a ~2.7× lower per-scene anomaly rate. Both tiers agree on
+    a real burst of change in mid-November 2025. With ~5–10 usable scenes/month,
+    the 3-observation rule gives a detection latency of roughly 1–3 weeks.
+  </p>
+  <h3>Bassin — monitored 2025-08 → 2026-07 (30 scenes, baseline 2022–2025)</h3>
+  <div class="figwrap"><img src="{{BASSIN_MONITOR_PNG}}" alt="Bassin alerting backtest"></div>
+  <p class="figcap">Same layout. The initial August-2025 burst is carry-over change
+    (the area was already mid-transformation relative to the older baseline); fresh
+    alert waves appear in March and June 2026.</p>
+  <p>
+    The winter cadence gap (few usable optical scenes November–January) is visible in
+    the right-hand panels — that is the slot Sentinel-1 radar would fill in a
+    production system.
+  </p>
+
+  <h2>SSL4EO pairwise change maps (two-date, deep features)</h2>
+  <p>
+    The same SSL4EO features also give a TESSERA-style two-date change map that works
+    for <em>any</em> pair of dates (no embedding-coverage lag): cosine distance
+    between the dense features of the two scenes, thresholded at robust
+    z&nbsp;&gt;&nbsp;4. Deep-feature maps are blobbier than spectral ones (receptive
+    field ≈ a few hundred metres) but far less sensitive to phenology.
+  </p>
+  <div class="figwrap"><img src="{{CHIBA_PAIR_PNG}}" alt="Chiba SSL4EO pair change"></div>
+  <div class="figwrap"><img src="{{BASSIN_PAIR_PNG}}" alt="Bassin SSL4EO pair change"></div>
+
+  <h2>Reproduce</h2>
+  <p>
+    All code is in <code>~/change_detection/scripts/</code>:
+    <code>sentinel2_stac.py</code> (search + RGBI download),
+    <code>download_pairs.py</code>, <code>run_classic_cd.py</code>,
+    <code>run_tessera_cd.py</code>, <code>make_figures.py</code>. Outputs (GeoTIFF change
+    maps + PNG panels) are in <code>outputs/</code>.
+  </p>
+</main>

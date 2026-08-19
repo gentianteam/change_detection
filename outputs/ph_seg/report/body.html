@@ -1,0 +1,109 @@
+<div class="wrap">
+<div class="eyebrow">Priority Habitat Inventory · VHR imagery · training-free</div>
+<h1>PHI Border Refinement</h1>
+<p class="lede">Nine ways of snapping Priority Habitat polygons to what the satellite image actually shows, tested on 96 polygons across six sites — and the ensemble we recommend running.</p>
+
+<div class="verdict">
+  <div class="row"><span class="k">Recommendation</span><span>Ensemble (pixel majority vote) of <code>grabcut2</code> + <code>sam2iter</code> + <code>sam2tile</code>, run inside a tolerance band of ±15 m (shrunk to ±4–15 m for thin polygons), followed by overlap resolution and 0.6 m simplification.</span></div>
+  <div class="row"><span class="k">Best single</span><span><code>sam2iter</code> (SAM 2.1 large, box + points + the polygon as mask prompt, 3 iterations) — cleanest object-like edges; <code>grabcut2</code> is the strongest non-neural method and runs on CPU in ~2 s per polygon.</span></div>
+  <div class="row"><span class="k">Dropped</span><span>Random walker, marker watershed, geodesic active contours, SLIC superpixels + kNN, per-polygon random-forest, SAM auto-masks-as-superpixels — each fails on some habitat type (details below).</span></div>
+  <div class="row"><span class="k">Outputs</span><span><code>outputs/ph_seg/refined_polygons/&lt;site&gt;_refined_{vote,grabcut2,sam2iter,sam2tile}.geojson</code> — original attributes kept, EPSG:27700. Code in <code>scripts/ph_seg/</code>.</span></div>
+</div>
+
+<h2>What we started from</h2>
+<p>Six PHI extracts (Sep 2025 version) over WorldView Legion / WV‑03 / Pléiades Neo / VS30 imagery at 0.19–0.40 m, four‑band R,G,B,NIR (Essex is RGB only). 98 polygons in total: 40 deciduous woodland (NFI 2023 source), 26 reedbed/fen (Millbrook), 32 grassland and other parcels. Two Blenheim woodland polygons fall entirely outside the imagery footprint and were skipped; the imagery is clipped to an AOI, so wherever a polygon leaves the footprint the original geometry is retained unchanged and only the part inside the image is refined.</p>
+<p>The kind of imprecision we see is consistent: woodland edges drawn 5–20 m inside or outside the visible canopy, grassland parcels drawn as straight-sided admin shapes that cut across hedges, reedbed outlines that predate the current pond edges, and a few polygons that are simply misplaced (e.g. Millbrook #20 "woodland" sits on grass between two tree lines). We treat the last group as out of scope: a border-refinement method should not move a boundary 50 m.</p>
+
+<h3>Ground rules that every method shares</h3>
+<ul>
+<li><b>Tolerance band.</b> The polygon eroded by <i>d</i> is a fixed "core" (always inside); everything beyond the polygon dilated by <i>d</i> is fixed "outside"; only the ring in between is up for grabs. Default <i>d</i> = 15 m; for thin polygons <i>d</i> shrinks to <code>clip(0.4 × mean width, 4, 15)</code> so hedgerow-woods and slivers cannot balloon.</li>
+<li><b>Same features.</b> R,G,B,NIR (or ExG for RGB-only), NDVI and a 5×5 texture band, at native resolution up to a 2048 px working window.</li>
+<li><b>Same clean-up.</b> Opening/closing with a 2 px disc, hole filling and speck removal at 0.2 % of the polygon area, then re‑imposing core/outside.</li>
+<li><b>Topology.</b> Neighbouring polygons are refined independently, then any pixel claimed twice goes to the polygon whose original contained it (or the nearest original). Originals do not overlap in any site.</li>
+<li><b>Semantics.</b> We aim for the boundary that is visible in the image — the canopy edge, the grass/hedge edge, the reed/water edge — not the OS field-boundary centreline. Hedges therefore tend to end up <i>outside</i> grassland parcels.</li>
+</ul>
+
+<h2>Methods tested</h2>
+<div class="tablewrap"><table class="methods">
+<thead><tr><th>method</th><th>idea</th><th>s / polygon</th><th>verdict</th></tr></thead>
+<tbody>
+<tr><td>grabcut2</td><td>OpenCV GrabCut on NIR‑R‑G false colour. Foreground GMM learnt from the core only, whole band starts as "probably background", 5 iterations, hard core/outside constraints. (Plain <code>grabcut</code> = FG learnt from the whole original polygon.)</td><td>2</td><td><span class="chip ok">keep</span> best classical; sharpest edges, deterministic once the RNG is seeded</td></tr>
+<tr><td>sam2iter</td><td>SAM 2.1 hiera‑large. Prompt = polygon bbox + 3–12 positive points deep in the core + 3–12 negative points in a 12 m outer ring + the polygon itself as a 256² mask prompt; take the candidate with best IoU vs the original, feed its logits back, 3 rounds.</td><td>2–3 (GPU)</td><td><span class="chip ok">keep</span> best overall; cleanest object edges, ignores shadows and hedges</td></tr>
+<tr><td>sam2tile</td><td>Same prompts but on 640 px tiles along the band at native resolution; per‑tile logits are feathered and averaged.</td><td>3–4 (GPU)</td><td><span class="chip ok">keep (conservative)</span> mask prompt anchors it to the original; native‑res detail; good tie‑breaker in the vote</td></tr>
+<tr><td>sam2</td><td>SAM 2.1, box + points only (no mask prompt), single pass.</td><td>2–3 (GPU)</td><td><span class="chip warn">ok</span> good on fields, blobby on complex woodland/scrub</td></tr>
+<tr><td>sam2mask</td><td>SAM 2.1, mask prompt only, single pass.</td><td>3</td><td><span class="chip warn">too timid</span> mean IoU with original 0.83 — barely moves</td></tr>
+<tr><td>sam2auto</td><td>SAM 2.1 automatic mask generator (24² prompts) as "semantic superpixels": each segment goes in/out by its overlap with the original.</td><td>4–11</td><td><span class="chip bad">drop</span> angular, inconsistent — segments straddle the habitat edge</td></tr>
+<tr><td>watershed</td><td>Marker watershed on multiband Sobel gradient (markers = core / outside).</td><td>0.4</td><td><span class="chip bad">drop</span> snaps to <i>any</i> edge (tracks, shadows), highest edge score but wrong edges</td></tr>
+<tr><td>randomwalker</td><td>skimage random walker on 5 feature channels, β=130.</td><td>0.4</td><td><span class="chip bad">drop</span> arbitrary cut through homogeneous bands</td></tr>
+<tr><td>gac</td><td>Morphological geodesic active contour from the polygon on an inverse‑gradient map.</td><td>4</td><td><span class="chip bad">drop</span> stalls near the start (IoU 0.85); needs per‑case balloon tuning</td></tr>
+<tr><td>superpixel</td><td>SLIC (~4 m) on Lab+NIR+NDVI in a 20 m annulus; band superpixels labelled by kNN trained on core vs outer‑ring superpixels.</td><td>20+</td><td><span class="chip bad">drop</span> noisy borders, slow, collapses on thin polygons</td></tr>
+<tr><td>pixelclf</td><td>Per‑polygon random forest (core vs outer ring) on smoothed features, threshold at 0.5.</td><td>3</td><td><span class="chip bad">drop</span> speckled, very high perimeter (compactness ×3)</td></tr>
+</tbody></table></div>
+
+<h2>How the methods compare</h2>
+<p>There is no ground truth here, so the numbers are proxies computed on every polygon (n = 96, <i>d</i> = 15 m); the pictures are what actually decided the ranking.</p>
+<ul class="small">
+<li><b>contrast</b> — mean feature difference between a 3 m inner ring and a 3 m outer ring along the new border, in pooled‑std units. Higher = the border separates two visibly different surfaces.</li>
+<li><b>edge_pct</b> — percentile of image gradient magnitude under the border. Higher = border sits on edges (but watershed shows this can be gamed).</li>
+<li><b>iou_orig / area_ratio</b> — how far the polygon moved. Neither should be extreme.</li>
+<li><b>compact</b> — perimeter² / 4πA; large values mean ragged borders.</li>
+</ul>
+<div class="tablewrap">{{table:all}}</div>
+<p>Contrast by habitat group (higher is better):</p>
+<div class="tablewrap">{{table:bygroup}}</div>
+<p>Tolerance sensitivity for <code>grabcut2</code>: widening the band buys more contrast but polygons drift further, and area growth is dominated by thin polygons — which is why the final run shrinks <i>d</i> for them.</p>
+<div class="tablewrap">{{table:sens}}</div>
+<p>Final run (adaptive <i>d</i>, the layers that were delivered):</p>
+<div class="tablewrap">{{table:final}}</div>
+<div class="tablewrap">{{table:sites}}</div>
+</div>
+
+<div class="wide">
+<h2 style="border:0;margin-top:1rem">Pictures</h2>
+<div class="legend"><span class="phi">PHI original</span><span class="ref">refined</span></div>
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/final/panels/dunthropfarm_p1_orig-grabcut2_final-sam2iter_final-sam2tile_final-vote_final.png|Dunthrop Farm, lowland meadow with a woodland strip as a hole. The original cuts 10–20 m inside the hedges. GrabCut snaps to the hedge but includes hedge trees where the core contained tree pixels; sam2iter stops at the grass edge; sam2tile is anchored to the original on the NW side; the vote is a clean field outline with the hole snapped to canopy.}}
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/final/panels/hrwallingford_p0-2_orig-grabcut2_final-sam2iter_final-sam2tile_final-vote_final.png|HR Wallingford. Top: riverside woodland — every method extends the eastern edge to the real canopy limit. Bottom: "good quality semi‑improved grassland" whose polygon includes two car‑park lobes. GrabCut drops most of them (spectrally unlike the core grass); the SAM variants keep them because the tarmac lobes are wide enough to hold part of the fixed core, and the vote follows the majority. Either way the outer edge is pulled to the real grass edge — the lobes are a mapping error, not a border error, and are left for a human.}}
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/final/panels/northfieldfarm_p12-19-17_orig-grabcut2_final-sam2iter_final-sam2tile_final-vote_final.png|Northfield Farm. Rows 1–2: two adjacent parcels whose shared boundary was drawn 20 m off the tree line; both move to the trees and stay topologically consistent after overlap resolution. Row 3: lowland fen strip — all three keep methods find the same vegetated extent.}}
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/final/panels/millbrook_p5-40-1_orig-grabcut2_final-sam2iter_final-sam2tile_final-vote_final.png|Millbrook (Pléiades Neo). Top: lakeside woodland — the refined outline follows lake shore and paths. Middle: reedbed cell — sam2iter/vote extend it to the ditch that visibly bounds it. Bottom: hedgerow wood inside a larger scrub block (adaptive d = 9 m); the wider band would run to the whole scrub block, which is why d shrinks for thin polygons.}}
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/final/panels/blenheim_p0-6_orig-grabcut2_final-sam2iter_final-sam2tile_final-vote_final.png|Blenheim. Top: floodplain grazing marsh parcels — the western field snaps to its hedge; the SE part is at the imagery footprint and partly unchanged. Bottom: a woodland belt whose polygon lies half inside the canopy; every method pulls the edge out to the trees, the outside‑footprint part is kept verbatim.}}
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/final/panels/essex_p2_orig-grabcut2_final-sam2iter_final-sam2tile_final-vote_final.png|Gunners Park (RGB only, 0.19 m). Woodland block: the north edge moves out to the canopy limit; the RGB‑only ExG feature is enough for GrabCut here.}}
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/full/panels/dunthropfarm_p1_orig-gac-watershed-randomwalker-superpixel-pixelclf-sam2auto.png|Why the other methods were dropped, on the Dunthrop meadow: GAC barely moves; watershed climbs over the hedge onto the far side; random walker cuts arbitrarily through the uniform grass band; superpixels and the pixel classifier are ragged; SAM auto‑masks are angular.}}
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/full/panels/millbrook_p40_orig-gac-watershed-randomwalker-superpixel-pixelclf-sam2auto.png|Same set on a Millbrook reedbed cell: only watershed and superpixels reach the ditch, and neither reliably.}}
+
+{{fig:/home/paul/change_detection/outputs/ph_seg/final/overview/northfieldfarm_vote_final.png|Northfield Farm, whole site: PHI original (red) vs the delivered vote layer (yellow).}}
+{{fig:/home/paul/change_detection/outputs/ph_seg/final/overview/millbrook_vote_final.png|Millbrook, whole site.}}
+</div>
+
+<div class="wrap">
+<h2>Recommended pipeline</h2>
+<ol>
+<li>Clip each polygon to the imagery footprint; keep the outside part verbatim.</li>
+<li>Build the tolerance band with adaptive <i>d</i> (<code>--adaptive</code>).</li>
+<li>Run <code>grabcut2</code> (CPU), <code>sam2iter</code> and <code>sam2tile</code> (GPU, ~2 GB).</li>
+<li>Pixel majority vote at 0.5 m, resolve overlaps between neighbours, simplify at 0.6 m.</li>
+</ol>
+<pre><code>cd scripts/ph_seg
+python run_refine.py --methods orig,grabcut2 --adaptive --tag final          # CPU
+python run_refine.py --methods sam2iter,sam2tile --adaptive --tag final      # GPU
+python postprocess.py --tag final --vote grabcut2,sam2iter,sam2tile --methods grabcut2,sam2iter,sam2tile,vote
+python overview.py --tag final --method vote_final; python panels.py --tag final --sites &lt;site&gt; --pids 1,2 --methods orig,vote_final</code></pre>
+<p class="small">Whole run: ~40 min for 96 polygons with the GPU shared with another job; SAM 2.1 large is fetched from HuggingFace (<code>facebook/sam2.1-hiera-large</code>) on first use. GrabCut alone (no GPU) is a respectable fallback and takes ~3 min.</p>
+
+<h2>Caveats and what to do next</h2>
+<ul>
+<li><b>Validation.</b> All ranking is by proxy metrics plus visual inspection. Hand‑digitising 20–30 reference borders (mix of woodland, grassland, reedbed) would let us report a real boundary‑distance error and tune <i>d</i> and the vote threshold properly.</li>
+<li><b>Hedge in or out.</b> Grassland parcels now stop at the grass edge. If the intended convention is the hedge centreline, buffer the grassland classes by half a hedge width (~2–3 m) afterwards, or add hedge pixels back where the original included them.</li>
+<li><b>Misplaced polygons.</b> Where the PHI outline is >d off (Millbrook #20, some Northfield slivers) refinement cannot fix it; the band keeps the damage bounded. A "confidence" flag (IoU between the three voters) would surface these for a human.</li>
+<li><b>Resolution.</b> Whole‑window SAM downsamples large polygons to 1024 px (~0.7 m/px at Northfield); the tiled variant works at native resolution and is the one to extend if finer edges are needed.</li>
+<li><b>Determinism.</b> OpenCV GrabCut seeds its GMM with k‑means++; the RNG is now seeded so runs are reproducible.</li>
+<li><b>Not tried.</b> Foundation‑model features (DINOv2/v3) with label propagation — patch size ≈5 m at this GSD makes them a poor fit for edge work; a fine‑tuned SAM decoder would help but was out of scope (no training).</li>
+</ul>
+</div>

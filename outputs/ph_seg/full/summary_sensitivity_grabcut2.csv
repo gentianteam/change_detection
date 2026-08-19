@@ -1,0 +1,4 @@
+tolerance d,iou_orig,area_ratio,edge_pct,contrast,compact,n_polygons
+8 m,0.573,1.421,0.805,0.595,2.243,96.0
+15 m,0.528,1.781,0.817,0.648,2.112,96.0
+25 m,0.469,2.284,0.812,0.722,2.313,96.0

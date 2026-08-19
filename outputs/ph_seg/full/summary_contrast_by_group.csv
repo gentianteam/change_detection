@@ -1,0 +1,14 @@
+method,grassland/other,reedbed/fen,woodland
+orig,0.264,0.513,0.269
+gac,0.325,0.576,0.311
+randomwalker,0.342,0.245,0.222
+watershed,0.481,0.706,0.376
+superpixel,0.4,0.617,0.344
+pixelclf,0.486,0.681,0.442
+grabcut,0.576,0.79,0.548
+grabcut2,0.581,0.824,0.596
+sam2,0.461,0.779,0.526
+sam2mask,0.362,0.607,0.345
+sam2iter,0.505,0.765,0.573
+sam2auto,0.336,0.583,0.29
+sam2tile,0.34,0.596,0.349

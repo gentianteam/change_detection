@@ -1,0 +1,27 @@
+# large rasters / downloaded data (not versioned)
+*.tif
+*.tiff
+*.npz
+data/
+global_0.1_degree_representation/
+global_0.1_degree_tiff_all/
+# heavy intermediate outputs of the ph_seg experiments (keep deliverables + summaries)
+outputs/ph_seg/dev*/
+outputs/ph_seg/d8/
+outputs/ph_seg/d25/
+outputs/ph_seg/full/*.geojson
+outputs/ph_seg/full/panels/
+outputs/ph_seg/full/logs/
+outputs/ph_seg/final/*.geojson
+outputs/ph_seg/final/panels/
+outputs/ph_seg/final/overview/
+outputs/ph_seg/final/logs/
+outputs/ph_seg/full.log
+outputs/ph_seg/quicklooks/
+outputs/ph_seg/refined_polygons.zip
+outputs/qgis/
+outputs/qgis_package.zip
+outputs/monitor/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

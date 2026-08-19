@@ -1,0 +1,7 @@
+{"title":"PHI Border Refinement","css":"report.css","body":"body.html","tables":{
+ "all":{"csv":"/home/paul/change_detection/outputs/ph_seg/full/summary_all.csv","index_name":"method","cols":["secs","iou_orig","area_ratio","area_ratio_med","edge_pct","contrast","compact"],"rename":{"secs":"s/poly","area_ratio_med":"area_ratio (median)"}},
+ "bygroup":{"csv":"/home/paul/change_detection/outputs/ph_seg/full/summary_contrast_by_group.csv","index_name":"method"},
+ "sens":{"csv":"/home/paul/change_detection/outputs/ph_seg/full/summary_sensitivity_grabcut2.csv","index_name":"tolerance d","fmt":{"n_polygons":"{:.0f}"}},
+ "final":{"csv":"/home/paul/change_detection/outputs/ph_seg/final/summary_final.csv","index_name":"method","rename":{"secs":"s/poly"}},
+ "sites":{"csv":"/home/paul/change_detection/outputs/ph_seg/final/summary_sites.csv","index_name":"site","fmt":{"polygons":"{:.0f}"}}
+}}
